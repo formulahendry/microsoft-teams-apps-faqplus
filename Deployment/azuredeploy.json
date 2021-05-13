@@ -75,6 +75,19 @@
         "description": "The pricing tier for the QnAMaker service."
       }
     },
+    "searchServiceSku": {
+      "type": "string",
+      "allowedValues": [
+        "F (3 indexes)",
+        "B (15 indexes)",
+        "S (50 indexes)",
+        "S2 (200 indexes)"
+      ],
+      "defaultValue": "B (15 indexes)",
+      "metadata": {
+        "description": "The pricing tier for the Azure Search service."
+      }
+    },
     "gitRepoUrl": {
       "type": "string",
       "metadata": {
@@ -101,6 +114,14 @@
     "qnaMakerAppServiceName": "[concat(parameters('baseResourceName'), '-qnamaker')]",
     "qnaMakerAppInsightsName": "[concat(parameters('baseResourceName'), '-qnamaker')]",
     "qnaMakerSkuValue": "[substring(parameters('qnaMakerSku'), 0, 2)]",
+    "azureSearchName": "[concat(uniquestring(concat(resourceGroup().id, parameters('baseResourceName'))), '-search')]",
+    "azureSearchSkus": {
+      "F ": "free",
+      "B ": "basic",
+      "S ": "standard",
+      "S2": "standard2"
+    },
+    "azureSearchSkuValue": "[variables('azureSearchSkus')[toUpper(substring(parameters('searchServiceSku'), 0, 2))]]",
     "sharedSkus": [
       "Free",
       "Shared"
@@ -257,8 +278,26 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Web/Sites', variables('qnaMakerAppServiceName'))]",
+        "[resourceId('Microsoft.Search/searchServices/', variables('azureSearchName'))]",
         "[resourceId('microsoft.insights/components/', variables('qnaMakerAppInsightsName'))]"
       ]
+    },
+    {
+      "name": "[variables('azureSearchName')]",
+      "type": "Microsoft.Search/searchServices",
+      "apiVersion": "2015-08-19",
+      "location": "[parameters('location')]",
+      "tags": {
+        "isqnamaker": "true"
+      },
+      "properties": {
+        "replicaCount": 1,
+        "partitionCount": 1,
+        "hostingMode": "default"
+      },
+      "sku": {
+        "name": "[toLower(variables('azureSearchSkuValue'))]"
+      }
     },
     {
       "type": "Microsoft.Web/sites",
@@ -307,9 +346,12 @@
           "name": "appsettings",
           "type": "config",
           "dependsOn": [
-            "[resourceId('Microsoft.Web/Sites', variables('qnaMakerAppServiceName'))]"
+            "[resourceId('Microsoft.Web/Sites', variables('qnaMakerAppServiceName'))]",
+            "[resourceId('Microsoft.Search/searchServices/', variables('azureSearchName'))]"
           ],
           "properties": {
+            "AzureSearchName": "[variables('azureSearchName')]",
+            "AzureSearchAdminKey": "[listAdminKeys(resourceId('Microsoft.Search/searchServices/', variables('azureSearchName')), '2015-08-19').primaryKey]",
             "UserAppInsightsKey": "[reference(resourceId('Microsoft.Insights/components/', variables('qnaMakerAppInsightsName')), '2015-05-01').InstrumentationKey]",
             "UserAppInsightsName": "[variables('qnaMakerAppInsightsName')]",
             "UserAppInsightsAppId": "[reference(resourceId('Microsoft.Insights/components/', variables('qnaMakerAppInsightsName')), '2015-05-01').AppId]",
